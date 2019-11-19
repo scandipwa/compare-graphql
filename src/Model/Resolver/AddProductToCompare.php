@@ -1,13 +1,11 @@
 <?php
 /**
- * ScandiPWA - Progressive Web App for Magento
+ * ScandiPWA_CompareGraphQl
  *
- * Copyright © Scandiweb, Inc. All rights reserved.
- * See LICENSE for license details.
- *
- * @license OSL-3.0 (Open Software License ("OSL") v. 3.0)
- * @package scandipwa/compare-graphql
- * @link    https://github.com/scandipwa/quote-graphql
+ * @category    ScandiPWA
+ * @package     ScandiPWA_CatalogGraphQl
+ * @author      <info@scandiweb.com>
+ * @copyright   Copyright (c) 2018 Scandiweb, Ltd (https://scandiweb.com)
  */
 
 declare(strict_types=1);
@@ -19,6 +17,7 @@ use Magento\Catalog\Helper\Product\Compare;
 use Magento\Catalog\Model\Product\Compare\ListCompare;
 use Magento\Customer\Model\Session as SessionAlias;
 use Magento\Customer\Model\Visitor as VisitorAlias;
+use Magento\Quote\Model\QuoteIdMaskFactory;
 use Magento\Framework\Event\ManagerInterface as ManagerInterfaceAlias;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\GraphQl\Config\Element\Field;
@@ -31,12 +30,17 @@ use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
 use Magento\Framework\ObjectManagerInterface as ObjectManagerInterfaceAlias;
 use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
 
+
 /**
  * Class AddProductToCompare
  * @package ScandiPWA\CompareGraphQl\Model\Resolver
  */
 class AddProductToCompare implements ResolverInterface
 {
+    /**
+     * @var QuoteIdMaskFactory
+     */
+    private $quoteIdMaskFactory;
 
     /**
      * @var ProductRepositoryInterface
@@ -79,9 +83,11 @@ class AddProductToCompare implements ResolverInterface
 
     /**
      * GetCartItems constructor.
+     *
      * @param ProductRepositoryInterface $productRepository
      * @param ListCompare $listCompare
      * @param VisitorAlias $customerVisitor
+     * @param QuoteIdMaskFactory $quoteIdMaskFactory
      * @param SessionAlias $customerSession
      * @param StoreManagerInterfaceAlias $storeManager
      * @param ManagerInterfaceAlias $eventManager
@@ -91,6 +97,7 @@ class AddProductToCompare implements ResolverInterface
         ProductRepositoryInterface $productRepository,
         ListCompare $listCompare,
         VisitorAlias $customerVisitor,
+        QuoteIdMaskFactory $quoteIdMaskFactory,
         SessionAlias $customerSession,
         StoreManagerInterfaceAlias $storeManager,
         ManagerInterfaceAlias $eventManager,
@@ -99,6 +106,7 @@ class AddProductToCompare implements ResolverInterface
         $this->productRepository = $productRepository;
         $this->listCompare = $listCompare;
         $this->customerVisitor = $customerVisitor;
+        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
         $this->customerSession = $customerSession;
         $this->storeManager = $storeManager;
         $this->eventManager = $eventManager;
@@ -131,13 +139,16 @@ class AddProductToCompare implements ResolverInterface
 
         $product = $this->productRepository->get($args['product_sku']);
         $productId = (int)$product->getId();
-
-        if ($productId && (isset($args['guestCartId']) || $customerId)) {
-            if ($customerId) {
-                $this->customerSession->setCustomerId($customerId);
+        if ($productId) {
+            if (isset($args['guestCartId'])) {
+                $quoteIdMask = $this->quoteIdMaskFactory
+                    ->create()
+                    ->load($args['guestCartId'], 'masked_id')
+                    ->getQuoteId();
+                $this->customerVisitor->setId($quoteIdMask);
             } else {
-                if (isset($args['guestCartId'])) {
-                    $this->customerVisitor->setId($args['guestCartId']);
+                if ($customerId) {
+                    $this->customerSession->setCustomerId($customerId);
                 } else {
                     return [];
                 }

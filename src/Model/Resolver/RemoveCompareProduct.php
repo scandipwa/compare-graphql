@@ -1,13 +1,11 @@
 <?php
 /**
- * ScandiPWA - Progressive Web App for Magento
+ * ScandiPWA_CompareGraphQl
  *
- * Copyright © Scandiweb, Inc. All rights reserved.
- * See LICENSE for license details.
- *
- * @license OSL-3.0 (Open Software License ("OSL") v. 3.0)
- * @package scandipwa/compare-graphql
- * @link    https://github.com/scandipwa/quote-graphql
+ * @category    ScandiPWA
+ * @package     ScandiPWA_CatalogGraphQl
+ * @author      <info@scandiweb.com>
+ * @copyright   Copyright (c) 2018 Scandiweb, Ltd (https://scandiweb.com)
  */
 
 declare(strict_types=1);
@@ -25,6 +23,7 @@ use Magento\Framework\GraphQl\Exception\GraphQlInputException;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
 use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
+use Magento\Quote\Model\QuoteIdMaskFactory;
 
 
 /**
@@ -33,7 +32,6 @@ use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
  */
 class RemoveCompareProduct implements ResolverInterface
 {
-
     /**
      * @var ProductRepositoryInterface
      */
@@ -54,6 +52,11 @@ class RemoveCompareProduct implements ResolverInterface
     protected $_customerSession;
 
     /**
+     * @var QuoteIdMaskFactory
+     */
+    private $quoteIdMaskFactory;
+
+    /**
      * @var StoreManagerInterfaceAlias
      */
     protected $_storeManager;
@@ -72,9 +75,11 @@ class RemoveCompareProduct implements ResolverInterface
 
     /**
      * GetCartItems constructor.
+     *
      * @param ProductRepositoryInterface $productRepository
      * @param VisitorAlias $_customerVisitor
      * @param SessionAlias $_customerSession
+     * @param QuoteIdMaskFactory $quoteIdMaskFactory
      * @param StoreManagerInterfaceAlias $_storeManager
      * @param ManagerInterfaceAlias $_eventManager
      * @param ItemFactoryAlias $compareItemFactory
@@ -83,6 +88,7 @@ class RemoveCompareProduct implements ResolverInterface
         ProductRepositoryInterface $productRepository,
         VisitorAlias $_customerVisitor,
         SessionAlias $_customerSession,
+        QuoteIdMaskFactory $quoteIdMaskFactory,
         StoreManagerInterfaceAlias $_storeManager,
         ManagerInterfaceAlias $_eventManager,
         ItemFactoryAlias $compareItemFactory
@@ -90,11 +96,24 @@ class RemoveCompareProduct implements ResolverInterface
         $this->productRepository = $productRepository;
         $this->_customerVisitor = $_customerVisitor;
         $this->_customerSession = $_customerSession;
+        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
         $this->_storeManager = $_storeManager;
         $this->_eventManager = $_eventManager;
         $this->compareItemFactory = $compareItemFactory;
     }
 
+    /**
+     * Removes a product from compare list.
+     *
+     * @param Field $field
+     * @param ContextInterface $context
+     * @param ResolveInfo $info
+     * @param array|null $value
+     * @param array|null $args
+     * @return array|Value|mixed
+     * @throws GraphQlInputException
+     * @throws NoSuchEntityException
+     */
     public function resolve(
         Field $field,
         $context,
@@ -102,7 +121,7 @@ class RemoveCompareProduct implements ResolverInterface
         array $value = null,
         array $args = null
     ) {
-        $customerId = (int)$context->getUserId();
+        $customerId = $context->getUserId();
 
         if (!isset($args['product_sku'])) {
             throw new GraphQlInputException(__('Please specify valid product'));
@@ -124,7 +143,11 @@ class RemoveCompareProduct implements ResolverInterface
                 $item = $this->compareItemFactory->create();
 
                 if (isset($args['guestCartId'])) {
-                    $this->_customerVisitor->setId($args['guestCartId']);
+                    $quoteIdMask = $this->quoteIdMaskFactory
+                        ->create()
+                        ->load($args['guestCartId'], 'masked_id')
+                        ->getQuoteId();
+                    $this->_customerVisitor->setId($quoteIdMask);
                 } else {
                     if ($customerId) {
                         $this->_customerSession->setCustomerId($customerId);
@@ -140,13 +163,10 @@ class RemoveCompareProduct implements ResolverInterface
                     $this->_eventManager->dispatch('catalog_product_compare_remove_product', ['product' => $item]);
 
                     return true;
-                } else {
-
-                    return false;
                 }
+
+                return false;
             }
         }
     }
 }
-
-

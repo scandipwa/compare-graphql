@@ -1,20 +1,15 @@
-
-# ScandiPWA - Progressive Web App for Magento
+##
+# ScandiPWA_CompareGraphQl
 #
-# Copyright © Scandiweb, Inc. All rights reserved.
-# See LICENSE for license details.
-#
-# @license OSL-3.0 (Open Software License ("OSL") v. 3.0)
-# @package scandipwa/compare-graphql
-# @link https://github.com/scandipwa/compare-graphql
-#
-# Copyright © Magento, Inc. All rights reserved.
-# See COPYING.txt for license details.
-
+# @category    ScandiPWA
+# @package     ScandiPWA_CatalogGraphQl
+# @author      <info@scandiweb.com>
+# @copyright   Copyright (c) 2018 Scandiweb, Ltd (https://scandiweb.com)
+##
 
 type Mutation {
-    addProductToCompare(product_sku: String!,guestCartId: String): CompareProductItem @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
-    removeCompareProduct(product_sku: String!,guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
+    addProductToCompare(product_sku: String!, guestCartId: String): CompareProductItem @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
+    removeCompareProduct(product_sku: String!, guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
     clearCompareProducts(guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ClearCompareProducts")
 }
 
@@ -30,6 +25,11 @@ type CompareProductItem {
 }
 
 type CompareProductsOutput {
-    products: [ProductInterface] @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ProductResolver") @doc(description: "The number of items in the wish list"),
-    count: Int @doc(description: "The number of items in the wish list"),
+    products: [ProductInterface] @doc(description: "Items in the compare list")
+    count: Int @doc(description: "The number of items in the compare list")
+}
+
+interface ProductInterface {
+    comparableAttributes: [AttributeWithValue] @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ComparableAttributes")
+    parent_url_key: String @doc(description: "Parent product url key")
 }
