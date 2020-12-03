@@ -139,7 +139,7 @@ class AddProductToCompare implements ResolverInterface
                 if (isset($args['guestCartId'])) {
                     $this->customerVisitor->setId($args['guestCartId']);
                 } else {
-                    return [];
+                    return false;
                 }
             }
         }
@@ -150,13 +150,16 @@ class AddProductToCompare implements ResolverInterface
             throw new GraphQlNoSuchEntityException(__('We cannot add product to review right now'));
         }
 
+        $result = false;
+
         if ($product) {
             $this->listCompare->addProduct($product);
             $this->eventManager->dispatch('catalog_product_compare_add_product', ['product' => $product]);
+            $result = true;
         }
 
         $this->objectManager->get(Compare::class)->calculate();
 
-        return $product->getData();
+        return $result;
     }
 }

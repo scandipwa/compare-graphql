@@ -1,4 +1,3 @@
-
 # ScandiPWA - Progressive Web App for Magento
 #
 # Copyright © Scandiweb, Inc. All rights reserved.
@@ -13,23 +12,16 @@
 
 
 type Mutation {
-    addProductToCompare(product_sku: String!,guestCartId: String): CompareProductItem @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
-    removeCompareProduct(product_sku: String!,guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
-    clearCompareProducts(guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ClearCompareProducts")
+    addProductToCompare(product_sku: String!, guestCartId: String): Boolean @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
+    removeComparedProduct(product_sku: String!, guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
+    clearComparedProducts(guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ClearCompareProducts")
 }
 
 type Query {
-    CompareProducts(guestCartId: String): CompareProductsOutput @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\CompareProductsResolver") @doc(description: "The compare products query returns the contents of a customer's compared products")
-}
-
-type CompareProductItem {
-    entity_id: Int @doc(description: "The compare product entity ID")
-    store_id: Int @doc(description: "The ID of the store from which the compare product is added")
-    sku: String @doc(description: "Sku of the compare product")
-    name: String @doc(description: "The name of the compare product")
+    compareProducts(guestCartId: String): CompareProductsOutput @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\CompareProductsResolver") @doc(description: "The compare products query returns the contents of a customer's compared products")
 }
 
 type CompareProductsOutput {
-    products: [ProductInterface] @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ProductResolver") @doc(description: "The number of items in the wish list"),
-    count: Int @doc(description: "The number of items in the wish list"),
+    products: [ProductInterface] @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ProductResolver") @doc(description: "The number of items in the wish list")
+    count: Int @doc(description: "The number of items in the wish list")
 }
