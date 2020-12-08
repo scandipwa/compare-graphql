@@ -77,8 +77,8 @@ class ClearCompareProducts implements ResolverInterface
             $items->clear();
             $this->objectManager->get(Compare::class)->calculate();
             return true;
-        } catch (LocalizedExceptionAlias $e) {
-            return false;
+//        } catch (LocalizedExceptionAlias $e) {
+//            return false;
         } catch (\Exception $e) {
             throw new GraphQlNoSuchEntityException(__('Something went wrong  clearing the comparison list.'));
         }

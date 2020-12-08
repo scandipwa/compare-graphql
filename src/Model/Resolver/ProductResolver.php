@@ -11,6 +11,7 @@ use Magento\CatalogGraphQl\Model\ProductDataProvider;
 use Magento\Framework\GraphQl\Config\Element\Field;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
+use Magento\Catalog\Model\Product\Media\Config as MediaConfig;
 
 /**
  * Fetches the Product data according to the GraphQL schema
@@ -23,11 +24,17 @@ class ProductResolver implements ResolverInterface
     private $productDataProvider;
 
     /**
+     * @var MediaConfig
+     */
+    private $mediaConfig;
+
+    /**
      * @param ProductDataProvider $productDataProvider
      */
-    public function __construct(ProductDataProvider $productDataProvider)
+    public function __construct(ProductDataProvider $productDataProvider, MediaConfig $mediaConfig)
     {
         $this->productDataProvider = $productDataProvider;
+        $this->mediaConfig = $mediaConfig;
     }
 
     /**
@@ -40,11 +47,18 @@ class ProductResolver implements ResolverInterface
         array $value = null,
         array $args = null
     ) {
+        $data = [];
 
         if (isset($value['model'])) {
             $compareProductsOutput = $value['model'];
             foreach ($compareProductsOutput as $product) {
-                $data[] = $this->productDataProvider->getProductDataById((int)$product->getProductId());
+                $item = $this->productDataProvider->getProductDataById((int)$product->getProductId());
+
+                $item['thumbnail'] = [
+                    'url' => $this->mediaConfig->getMediaUrl($product->getThumbnail())
+                ];
+
+                $data[] = $item;
             }
 
             return $data;

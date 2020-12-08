@@ -22,6 +22,18 @@ type Query {
 }
 
 type CompareProductsOutput {
-    products: [ProductInterface] @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ProductResolver") @doc(description: "The number of items in the wish list")
-    count: Int @doc(description: "The number of items in the wish list")
+    products: [ProductInterface] @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ProductResolver") @doc(description: "The number of items in the compare list")
+    count: Int @doc(description: "The number of items in the compare list")
+}
+
+extend interface ProductInterface {
+    comparableAttributes: [AttributeWithValue] @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ComparableAttributesResolver")
+}
+
+type AttributeWithValue {
+    attribute_id: Int
+    attribute_label: String
+    attribute_code: String
+    attribute_value: String
+    attribute_type: String
 }

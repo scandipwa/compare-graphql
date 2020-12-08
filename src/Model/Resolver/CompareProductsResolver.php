@@ -109,14 +109,19 @@ class CompareProductsResolver implements ResolverInterface
             $message = $e->getMessage();
         }
 
-        if ($collection->count() === 0) {
-            return [];
+        $count = $collection->count();
+        $products = [];
+        $model = [];
+
+        if ($count > 0) {
+            $products = $collection->getData();
+            $model = $collection->getItems();
         }
 
         return [
-            'count' => count($collection->getData()),
-            'products' => $collection->getData(),
-            'model' => $collection->getItems(),
+            'count' => $count,
+            'products' => $products,
+            'model' => $model
         ];
     }
 }
