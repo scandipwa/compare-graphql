@@ -14,18 +14,14 @@ declare(strict_types=1);
 
 namespace ScandiPWA\CompareGraphQl\Model\Resolver;
 
-use Magento\Catalog\Api\ProductRepositoryInterface;
-use Magento\Catalog\Model\Product\Compare\ItemFactory as ItemFactoryAlias;
-use Magento\Customer\Model\Session as SessionAlias;
-use Magento\Customer\Model\Visitor as VisitorAlias;
-use Magento\Framework\Event\ManagerInterface as ManagerInterfaceAlias;
-use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\GraphQl\Config\Element\Field;
-use Magento\Framework\GraphQl\Exception\GraphQlInputException;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
-use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
-
+use Magento\Catalog\Model\Product\Compare\ListCompare;
+use Magento\Customer\Model\Session;
+use Magento\Customer\Model\Visitor;
+use Magento\Quote\Model\QuoteIdMaskFactory;
+use Magento\Catalog\Model\Product\Compare\ItemFactory;
 
 /**
  * Class RemoveCompareProduct
@@ -33,68 +29,55 @@ use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
  */
 class RemoveCompareProduct implements ResolverInterface
 {
-
     /**
-     * @var ProductRepositoryInterface
+     * @var ListCompare
      */
-    protected $productRepository;
+    private $compareList;
 
     /**
-     * Customer visitor
-     *
-     * @var VisitorAlias
+     * @var Visitor
      */
-    protected $_customerVisitor;
+    private $customerVisitor;
 
     /**
-     * Customer session
-     *
-     * @var SessionAlias
+     * @var Session
      */
-    protected $_customerSession;
+    private $customerSession;
 
     /**
-     * @var StoreManagerInterfaceAlias
+     * @var QuoteIdMaskFactory
      */
-    protected $_storeManager;
+    private $quoteIdMaskFactory;
 
     /**
-     * @var ManagerInterfaceAlias
+     * @var ItemFactory
      */
-    protected $_eventManager;
+    private $compareItemFactory;
 
     /**
-     * Compare item factory
-     *
-     * @var ItemFactoryAlias
-     */
-    protected $compareItemFactory;
-
-    /**
-     * GetCartItems constructor.
-     * @param ProductRepositoryInterface $productRepository
-     * @param VisitorAlias $_customerVisitor
-     * @param SessionAlias $_customerSession
-     * @param StoreManagerInterfaceAlias $_storeManager
-     * @param ManagerInterfaceAlias $_eventManager
-     * @param ItemFactoryAlias $compareItemFactory
+     * @param ListCompare $compareList
+     * @param Visitor $customerVisitor
+     * @param Session $customerSession
+     * @param QuoteIdMaskFactory $quoteIdMaskFactory
+     * @param ItemFactory $compareItemFactory
      */
     public function __construct(
-        ProductRepositoryInterface $productRepository,
-        VisitorAlias $_customerVisitor,
-        SessionAlias $_customerSession,
-        StoreManagerInterfaceAlias $_storeManager,
-        ManagerInterfaceAlias $_eventManager,
-        ItemFactoryAlias $compareItemFactory
+        ListCompare $compareList,
+        Visitor $customerVisitor,
+        Session $customerSession,
+        QuoteIdMaskFactory $quoteIdMaskFactory,
+        ItemFactory $compareItemFactory
     ) {
-        $this->productRepository = $productRepository;
-        $this->_customerVisitor = $_customerVisitor;
-        $this->_customerSession = $_customerSession;
-        $this->_storeManager = $_storeManager;
-        $this->_eventManager = $_eventManager;
+        $this->compareList = $compareList;
+        $this->customerVisitor = $customerVisitor;
+        $this->customerSession = $customerSession;
+        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
         $this->compareItemFactory = $compareItemFactory;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function resolve(
         Field $field,
         $context,
@@ -102,50 +85,38 @@ class RemoveCompareProduct implements ResolverInterface
         array $value = null,
         array $args = null
     ) {
-        $customerId = (int)$context->getUserId();
+        if (isset($args['guestCartId'])) {
+            $quoteIdMask = $this->quoteIdMaskFactory
+                ->create()
+                ->load($args['guestCartId'], 'masked_id')
+                ->getQuoteId();
+            $this->customerVisitor->setId($quoteIdMask);
+        } else {
+            $customerId = (int)$context->getUserId();
 
-        if (!isset($args['product_sku'])) {
-            throw new GraphQlInputException(__('Please specify valid product'));
-        }
-
-        $product = $this->productRepository->get($args['product_sku']);
-
-        $productId = (int)$product->getId();
-
-        if ($productId) {
-            $storeId = $this->_storeManager->getStore()->getId();
-            try {
-                $product = $this->productRepository->getById($productId, false, $storeId);
-            } catch (NoSuchEntityException $e) {
-                $product = null;
-            }
-
-            if ($product) {
-                $item = $this->compareItemFactory->create();
-
-                if (isset($args['guestCartId'])) {
-                    $this->_customerVisitor->setId($args['guestCartId']);
-                } else {
-                    if ($customerId) {
-                        $this->_customerSession->setCustomerId($customerId);
-                    } else {
-                        return false;
-                    }
-                }
-
-                $item->loadByProduct($product);
-
-                if ($item->getId()) {
-                    $item->delete();
-                    $this->_eventManager->dispatch('catalog_product_compare_remove_product', ['product' => $item]);
-
-                    return true;
-                } else {
-
-                    return false;
-                }
+            if ($customerId) {
+                $this->customerSession->setCustomerId($customerId);
+            } else {
+                return false;
             }
         }
+
+        $productId = (int)$args['product_id'];
+
+        $item = $this->compareItemFactory->create();
+        $item->addVisitorId($this->customerVisitor->getId());
+
+        if ($this->customerSession->isLoggedIn()) {
+            $item->setCustomerId($this->customerSession->getCustomerId());
+        }
+
+        $item->loadByProduct($productId);
+
+        if ($item->getId()) {
+            $item->delete();
+        }
+
+        return true;
     }
 }
 

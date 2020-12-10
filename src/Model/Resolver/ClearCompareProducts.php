@@ -14,14 +14,15 @@ declare(strict_types=1);
 
 namespace ScandiPWA\CompareGraphQl\Model\Resolver;
 
-use Magento\Catalog\Helper\Product\Compare;
-use Magento\Catalog\Model\ResourceModel\Product\Compare\Item\CollectionFactory as CollectionFactoryAlias;
-use Magento\Framework\Exception\LocalizedException as LocalizedExceptionAlias;
+use Magento\Catalog\Model\ResourceModel\Product\Compare\Item\CollectionFactory;
+use Magento\Customer\Model\Session;
+use Magento\Customer\Model\Visitor;
 use Magento\Framework\GraphQl\Config\Element\Field;
-use Magento\Framework\GraphQl\Exception\GraphQlNoSuchEntityException;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
-use Magento\Framework\ObjectManagerInterface as ObjectManagerInterfaceAlias;
+use Magento\Catalog\Model\Product\Compare\ListCompare;
+use Magento\Quote\Model\QuoteIdMaskFactory;
+use Magento\Store\Model\StoreManagerInterface;
 
 /**
  * Class ClearCompareProducts
@@ -30,29 +31,64 @@ use Magento\Framework\ObjectManagerInterface as ObjectManagerInterfaceAlias;
 class ClearCompareProducts implements ResolverInterface
 {
     /**
-     * @var ObjectManagerInterfaceAlias
+     * @var ListCompare
      */
-    protected $objectManager;
+    private $compareList;
 
-    /* Item collection factory
-    *
-    * @var CollectionFactoryAlias
-    */
+    /**
+     * @var Visitor
+     */
+    private $customerVisitor;
+
+    /**
+     * @var Session
+     */
+    private $customerSession;
+
+    /**
+     * @var QuoteIdMaskFactory
+     */
+    private $quoteIdMaskFactory;
+
+    /**
+     * @var StoreManagerInterface
+     */
+    private $storeManager;
+
+    /**
+     * Item collection factory
+     *
+     * @var CollectionFactory
+     */
     protected $itemCollectionFactory;
 
     /**
-     * GetCartItems constructor.
-     * @param ObjectManagerInterfaceAlias $_objectManager
-     * @param CollectionFactoryAlias $itemCollectionFactory
+     * @param ListCompare $compareList
+     * @param StoreManagerInterface $storeManager
+     * @param Visitor $customerVisitor
+     * @param Session $customerSession
+     * @param QuoteIdMaskFactory $quoteIdMaskFactory
+     * @param CollectionFactory $itemCollectionFactory
      */
     public function __construct(
-        ObjectManagerInterfaceAlias $_objectManager,
-        CollectionFactoryAlias $itemCollectionFactory
+        ListCompare $compareList,
+        StoreManagerInterface $storeManager,
+        Visitor $customerVisitor,
+        Session $customerSession,
+        QuoteIdMaskFactory $quoteIdMaskFactory,
+        CollectionFactory $itemCollectionFactory
     ) {
-        $this->objectManager = $_objectManager;
+        $this->compareList = $compareList;
+        $this->storeManager = $storeManager;
+        $this->customerVisitor = $customerVisitor;
+        $this->customerSession = $customerSession;
+        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
         $this->itemCollectionFactory = $itemCollectionFactory;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function resolve(
         Field $field,
         $context,
@@ -60,27 +96,40 @@ class ClearCompareProducts implements ResolverInterface
         array $value = null,
         array $args = null
     ) {
-        $customerId = (int)$context->getUserId();
-        $items = $this->itemCollectionFactory->create();
-
-        if ($customerId) {
-            $items->setCustomerId($customerId);
+        if (isset($args['guestCartId'])) {
+            $quoteIdMask = $this->quoteIdMaskFactory
+                ->create()
+                ->load($args['guestCartId'], 'masked_id')
+                ->getQuoteId();
+            $this->customerVisitor->setId($quoteIdMask);
         } else {
-            if (isset($args['guestCartId'])) {
-                $items->setVisitorId($args['guestCartId']);
+            $customerId = (int)$context->getUserId();
+
+            if ($customerId) {
+                $this->customerSession->setCustomerId($customerId);
             } else {
                 return false;
             }
         }
 
-        try {
-            $items->clear();
-            $this->objectManager->get(Compare::class)->calculate();
-            return true;
-//        } catch (LocalizedExceptionAlias $e) {
-//            return false;
-        } catch (\Exception $e) {
-            throw new GraphQlNoSuchEntityException(__('Something went wrong  clearing the comparison list.'));
+        $collection = $this->itemCollectionFactory->create();
+        $collection->setVisitorId($this->customerVisitor->getId());
+
+        if ($this->customerSession->isLoggedIn()) {
+            $collection->setCustomerId($this->customerSession->getCustomerId());
         }
+
+        $store = $this->storeManager->getStore();
+
+        $collection->setStore($store);
+
+        try {
+            // This loads items but throws undefined method exception
+            $collection->load();
+        } catch (\Exception $e) {}
+
+        $collection->clear();
+
+        return true;
     }
 }

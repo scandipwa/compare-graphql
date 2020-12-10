@@ -12,8 +12,8 @@
 
 
 type Mutation {
-    addProductToCompare(product_sku: String!, guestCartId: String): Boolean @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
-    removeComparedProduct(product_sku: String!, guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
+    addProductToCompare(product_id: String!, guestCartId: String): Boolean @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
+    removeComparedProduct(product_id: String!, guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
     clearComparedProducts(guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ClearCompareProducts")
 }
 

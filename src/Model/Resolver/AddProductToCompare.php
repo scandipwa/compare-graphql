@@ -14,22 +14,14 @@ declare(strict_types=1);
 
 namespace ScandiPWA\CompareGraphQl\Model\Resolver;
 
-use Magento\Catalog\Api\ProductRepositoryInterface;
-use Magento\Catalog\Helper\Product\Compare;
-use Magento\Catalog\Model\Product\Compare\ListCompare;
-use Magento\Customer\Model\Session as SessionAlias;
-use Magento\Customer\Model\Visitor as VisitorAlias;
-use Magento\Framework\Event\ManagerInterface as ManagerInterfaceAlias;
-use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\GraphQl\Config\Element\Field;
-use Magento\Framework\GraphQl\Exception\GraphQlInputException;
-use Magento\Framework\GraphQl\Exception\GraphQlNoSuchEntityException;
-use Magento\Framework\GraphQl\Query\Resolver\ContextInterface;
-use Magento\Framework\GraphQl\Query\Resolver\Value;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
-use Magento\Framework\ObjectManagerInterface as ObjectManagerInterfaceAlias;
-use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
+use Magento\Catalog\Model\Product\Compare\ListCompare;
+use Magento\Customer\Model\Session;
+use Magento\Customer\Model\Visitor;
+use Magento\Quote\Model\QuoteIdMaskFactory;
+use Magento\Catalog\Model\Product\Compare\ItemFactory;
 
 /**
  * Class AddProductToCompare
@@ -37,84 +29,54 @@ use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
  */
 class AddProductToCompare implements ResolverInterface
 {
-
-    /**
-     * @var ProductRepositoryInterface
-     */
-    protected $productRepository;
-
     /**
      * @var ListCompare
      */
-    protected $listCompare;
+    private $compareList;
 
     /**
-     * Customer visitor
-     *
-     * @var VisitorAlias
+     * @var Visitor
      */
-    protected $customerVisitor;
+    private $customerVisitor;
 
     /**
-     * Customer session
-     *
-     * @var SessionAlias
+     * @var Session
      */
-    protected $customerSession;
+    private $customerSession;
 
     /**
-     * @var StoreManagerInterfaceAlias
+     * @var QuoteIdMaskFactory
      */
-    protected $storeManager;
+    private $quoteIdMaskFactory;
 
     /**
-     * @var ManagerInterfaceAlias
+     * @var ItemFactory
      */
-    protected $eventManager;
+    private $compareItemFactory;
 
     /**
-     * @var ObjectManagerInterfaceAlias
-     */
-    protected $objectManager;
-
-    /**
-     * GetCartItems constructor.
-     * @param ProductRepositoryInterface $productRepository
-     * @param ListCompare $listCompare
-     * @param VisitorAlias $customerVisitor
-     * @param SessionAlias $customerSession
-     * @param StoreManagerInterfaceAlias $storeManager
-     * @param ManagerInterfaceAlias $eventManager
-     * @param ObjectManagerInterfaceAlias $objectManager
+     * @param ListCompare $compareList
+     * @param Visitor $customerVisitor
+     * @param Session $customerSession
+     * @param QuoteIdMaskFactory $quoteIdMaskFactory
+     * @param ItemFactory $compareItemFactory
      */
     public function __construct(
-        ProductRepositoryInterface $productRepository,
-        ListCompare $listCompare,
-        VisitorAlias $customerVisitor,
-        SessionAlias $customerSession,
-        StoreManagerInterfaceAlias $storeManager,
-        ManagerInterfaceAlias $eventManager,
-        ObjectManagerInterfaceAlias $objectManager
+        ListCompare $compareList,
+        Visitor $customerVisitor,
+        Session $customerSession,
+        QuoteIdMaskFactory $quoteIdMaskFactory,
+        ItemFactory $compareItemFactory
     ) {
-        $this->productRepository = $productRepository;
-        $this->listCompare = $listCompare;
+        $this->compareList = $compareList;
         $this->customerVisitor = $customerVisitor;
         $this->customerSession = $customerSession;
-        $this->storeManager = $storeManager;
-        $this->eventManager = $eventManager;
-        $this->objectManager = $objectManager;
+        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
+        $this->compareItemFactory = $compareItemFactory;
     }
 
     /**
-     * @param Field $field
-     * @param ContextInterface $context
-     * @param ResolveInfo $info
-     * @param array|null $value
-     * @param array|null $args
-     * @return array|Value|mixed
-     * @throws GraphQlInputException
-     * @throws GraphQlNoSuchEntityException
-     * @throws NoSuchEntityException
+     * @inheritDoc
      */
     public function resolve(
         Field $field,
@@ -123,43 +85,42 @@ class AddProductToCompare implements ResolverInterface
         array $value = null,
         array $args = null
     ) {
-        $customerId = $context->getUserId();
+        if (isset($args['guestCartId'])) {
+            $quoteIdMask = $this->quoteIdMaskFactory
+                ->create()
+                ->load($args['guestCartId'], 'masked_id')
+                ->getQuoteId();
+            $this->customerVisitor->setId($quoteIdMask);
+        } else {
+            $customerId = (int)$context->getUserId();
 
-        if (!isset($args['product_sku'])) {
-            throw new GraphQlInputException(__('Please specify valid product'));
-        }
-
-        $product = $this->productRepository->get($args['product_sku']);
-        $productId = (int)$product->getId();
-
-        if ($productId && (isset($args['guestCartId']) || $customerId)) {
             if ($customerId) {
                 $this->customerSession->setCustomerId($customerId);
             } else {
-                if (isset($args['guestCartId'])) {
-                    $this->customerVisitor->setId($args['guestCartId']);
-                } else {
-                    return false;
-                }
+                return false;
             }
         }
-        $storeId = $this->storeManager->getStore()->getId();
-        try {
-            $product = $this->productRepository->getById($productId, false, $storeId);
-        } catch (NoSuchEntityException $e) {
-            throw new GraphQlNoSuchEntityException(__('We cannot add product to review right now'));
+
+        $productId = (int)$args['product_id'];
+
+        if (!$productId) {
+            return false;
         }
 
-        $result = false;
+        $item = $this->compareItemFactory->create();
+        $item->addVisitorId($this->customerVisitor->getId());
 
-        if ($product) {
-            $this->listCompare->addProduct($product);
-            $this->eventManager->dispatch('catalog_product_compare_add_product', ['product' => $product]);
-            $result = true;
+        if ($this->customerSession->isLoggedIn()) {
+            $item->setCustomerId($this->customerSession->getCustomerId());
         }
 
-        $this->objectManager->get(Compare::class)->calculate();
+        $item->loadByProduct($productId);
 
-        return $result;
+        if (!$item->getId()) {
+            $item->addProductData($productId);
+            $item->save();
+        }
+
+        return true;
     }
 }
