@@ -12,8 +12,8 @@
 
 
 type Mutation {
-    addProductToCompare(product_id: String!, guestCartId: String): Boolean @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
-    removeComparedProduct(product_id: String!, guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
+    addProductToCompare(product_id: Int!, guestCartId: String): Boolean @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\AddProductToCompare")
+    removeComparedProduct(product_id: Int!, guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\RemoveCompareProduct")
     clearComparedProducts(guestCartId: String): Boolean @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ClearCompareProducts")
 }
 
@@ -22,12 +22,12 @@ type Query {
 }
 
 type CompareProductsOutput {
-    products: [ProductInterface] @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ProductResolver") @doc(description: "The number of items in the compare list")
+    products: [ProductInterface] @doc(description: "Compare list items")
     count: Int @doc(description: "The number of items in the compare list")
 }
 
 extend interface ProductInterface {
-    comparableAttributes: [AttributeWithValue] @resolver(class:"\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ComparableAttributesResolver")
+    comparableAttributes: [AttributeWithValue] @resolver(class: "\\ScandiPWA\\CompareGraphQl\\Model\\Resolver\\ComparableAttributesResolver")
 }
 
 type AttributeWithValue {

@@ -24,6 +24,8 @@ use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
 use Magento\Customer\Model\Session;
 use Magento\Customer\Model\Visitor;
 use Magento\Quote\Model\QuoteIdMaskFactory;
+use Magento\CatalogGraphQl\Model\ProductDataProvider;
+use \Magento\Catalog\Model\Product\Media\Config as MediaConfig;
 
 
 /**
@@ -73,6 +75,16 @@ class CompareProductsResolver implements ResolverInterface
     private $quoteIdMaskFactory;
 
     /**
+     * @var ProductDataProvider
+     */
+    private $productDataProvider;
+
+    /**
+     * @var MediaConfig
+     */
+    private $mediaConfig;
+
+    /**
      * GetCartItems constructor.
      * @param ListCompare $listCompare
      * @param StoreManagerInterfaceAlias $storeManager
@@ -81,6 +93,8 @@ class CompareProductsResolver implements ResolverInterface
      * @param Visitor $customerVisitor
      * @param Session $customerSession
      * @param QuoteIdMaskFactory $quoteIdMaskFactory
+     * @param ProductDataProvider $productDataProvider
+     * @param MediaConfig $mediaConfig
      */
     public function __construct(
         ListCompare $listCompare,
@@ -89,7 +103,9 @@ class CompareProductsResolver implements ResolverInterface
         VisibilityAlias $catalogProductVisibility,
         Visitor $customerVisitor,
         Session $customerSession,
-        QuoteIdMaskFactory $quoteIdMaskFactory
+        QuoteIdMaskFactory $quoteIdMaskFactory,
+        ProductDataProvider $productDataProvider,
+        MediaConfig $mediaConfig
     ) {
         $this->listCompare = $listCompare;
         $this->storeManager = $storeManager;
@@ -98,6 +114,8 @@ class CompareProductsResolver implements ResolverInterface
         $this->customerVisitor = $customerVisitor;
         $this->customerSession = $customerSession;
         $this->quoteIdMaskFactory = $quoteIdMaskFactory;
+        $this->productDataProvider = $productDataProvider;
+        $this->mediaConfig = $mediaConfig;
     }
 
     public function resolve(
@@ -107,71 +125,60 @@ class CompareProductsResolver implements ResolverInterface
         array $value = null,
         array $args = null
     ) {
-        if (isset($args['guestCartId'])) {
-            $quoteIdMask = $this->quoteIdMaskFactory
-                ->create()
-                ->load($args['guestCartId'], 'masked_id')
-                ->getQuoteId();
-            $this->customerVisitor->setId($quoteIdMask);
-        } else {
-            $customerId = (int)$context->getUserId();
+        $customerId = (int)$context->getUserId();
+        $guestCardId = isset($args['guestCartId']) ? $args['guestCartId'] : null;
 
-            if ($customerId) {
-                $this->customerSession->setCustomerId($customerId);
-            } else {
-                return false;
-            }
+        if (!$customerId && !$guestCardId) {
+            return null;
         }
 
-//        $customerId = (int)$context->getUserId();
-        $storeId = $this->storeManager->getStore()->getId();
         $collection = $this->listCompare->getItemCollection();
 
-        $collection->setVisitorId($this->customerVisitor->getId());
+        if ($customerId) {
+            $collection->setCustomerId($customerId);
+        } else if ($guestCardId) {
+            $quoteIdMask = $this->quoteIdMaskFactory
+                ->create()
+                ->load($guestCardId, 'masked_id')
+                ->getQuoteId();
 
-        if ($this->customerSession->isLoggedIn()) {
-            $collection->setCustomerId($this->customerSession->getCustomerId());
+            $collection->setVisitorId($quoteIdMask);
         }
 
-        $collection->setStoreId($storeId);
-
-//        if (isset($args['guestCartId'])) {
-//            $collection->setVisitorId($args['guestCartId']);
-//        } else {
-//            if ($customerId) {
-//                $collection->setCustomerId($customerId);
-//            } else {
-//                return [];
-//            }
-//        }
-
-        $collection->addAttributeToSelect(
-            $this->catalogConfig->getProductAttributes()
-        )->loadComparableAttributes()->addMinimalPrice()->addTaxPercents()->setVisibility(
-            $this->catalogProductVisibility->getVisibleInSiteIds()
-        );
+        $store = $this->storeManager->getStore();
+        $collection->setStore($store);
 
         try {
+            // This loads items but throws undefined method exception which can be ignored
             $collection->load();
-        } catch (\Exception $e) {
-            $message = $e->getMessage();
-        }
+        } catch (\Exception $e) {}
 
-        $count = $collection->count();
         $products = [];
-        $model = [];
+        $productIds = $collection->getProductIds();
 
-        if ($count > 0) {
-            $products = $collection->getData();
-            $model = $collection->getItems();
+        foreach ($productIds as $productId) {
+            $item = $this->productDataProvider->getProductDataById((int)$productId);
+
+            if (isset($item['thumbnail']) && !empty($item['thumbnail'])) {
+                $item['thumbnail'] = [
+                    'path' => $item['thumbnail'],
+                    'url' => $this->mediaConfig->getMediaUrl($item['thumbnail']),
+                ];
+            }
+
+            $products[] = $item;
         }
+
+//        \Magento\Framework\App\ObjectManager::getInstance()
+//            ->create(\Psr\Log\LoggerInterface::class)
+//            ->info('Compare products', [
+//                $this->productDataProvider->getProductDataById((int)$productIds[0])
+//            ]);
 
         return [
-            'count' => $count,
+            'count' => count($products),
             'products' => $products,
-            'model' => $model
+            'model' => $products
         ];
     }
 }
-
-
