@@ -78,17 +78,15 @@ class ClearCompareProducts implements ResolverInterface
 
         $collection = $this->itemCollectionFactory->create();
 
-        if ($guestCardId) {
+        if ($customerId) {
+            $collection->setCustomerId($customerId);
+        } elseif ($guestCardId) {
             $quoteIdMask = $this->quoteIdMaskFactory
                 ->create()
                 ->load($guestCardId, 'masked_id')
                 ->getQuoteId();
 
             $collection->setVisitorId($quoteIdMask);
-        }
-
-        if ($customerId) {
-            $collection->setCustomerId($customerId);
         }
 
         $store = $this->storeManager->getStore();

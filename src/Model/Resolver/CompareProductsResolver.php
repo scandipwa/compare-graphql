@@ -136,7 +136,7 @@ class CompareProductsResolver implements ResolverInterface
 
         if ($customerId) {
             $collection->setCustomerId($customerId);
-        } else if ($guestCardId) {
+        } elseif ($guestCardId) {
             $quoteIdMask = $this->quoteIdMaskFactory
                 ->create()
                 ->load($guestCardId, 'masked_id')
@@ -153,32 +153,29 @@ class CompareProductsResolver implements ResolverInterface
             $collection->load();
         } catch (\Exception $e) {}
 
+        $count = $collection->count();
         $products = [];
-        $productIds = $collection->getProductIds();
 
-        foreach ($productIds as $productId) {
-            $item = $this->productDataProvider->getProductDataById((int)$productId);
+        if ($count) {
+            $productIds = $collection->getProductIds();
 
-            if (isset($item['thumbnail']) && !empty($item['thumbnail'])) {
-                $item['thumbnail'] = [
-                    'path' => $item['thumbnail'],
-                    'url' => $this->mediaConfig->getMediaUrl($item['thumbnail']),
-                ];
+            foreach ($productIds as $productId) {
+                $item = $this->productDataProvider->getProductDataById((int)$productId);
+
+                if (isset($item['thumbnail']) && !empty($item['thumbnail'])) {
+                    $item['thumbnail'] = [
+                        'path' => $item['thumbnail'],
+                        'url' => $this->mediaConfig->getMediaUrl($item['thumbnail']),
+                    ];
+                }
+
+                $products[] = $item;
             }
-
-            $products[] = $item;
         }
 
-//        \Magento\Framework\App\ObjectManager::getInstance()
-//            ->create(\Psr\Log\LoggerInterface::class)
-//            ->info('Compare products', [
-//                $this->productDataProvider->getProductDataById((int)$productIds[0])
-//            ]);
-
         return [
-            'count' => count($products),
-            'products' => $products,
-            'model' => $products
+            'count' => $count,
+            'products' => $products
         ];
     }
 }

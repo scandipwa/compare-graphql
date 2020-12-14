@@ -22,6 +22,7 @@ use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Swatches\Helper\Data;
 use Magento\Catalog\Model\ProductRepository;
 use Magento\Eav\Model\Entity\Attribute\AbstractAttribute;
+use Magento\Catalog\Model\Product;
 
 /**
  * Class ComparableAttributes
@@ -76,7 +77,8 @@ class ComparableAttributesResolver implements ResolverInterface
         $result = [];
 
         foreach ($attributes as $attribute) {
-            if ($attribute->getIsVisibleOnFront() && $attribute->getIsComparable()) {
+            //if ($attribute->getIsVisibleOnFront() && $attribute->getIsComparable()) {
+            if ($attribute->getIsVisible() && $attribute->getIsComparable()) {
                 $attributeCode = $attribute->getAttributeCode();
 
                 $result[] = [
@@ -84,13 +86,23 @@ class ComparableAttributesResolver implements ResolverInterface
                     'attribute_code' => $attributeCode,
                     'attribute_type' => $attribute->getFrontendInput(),
                     'attribute_label' => $attribute->getFrontendLabel(),
-                    'attribute_value' => $product->getAttributeText($attributeCode) ? : null,
+                    'attribute_value' => $this->getAttributeValue($product, $attributeCode),
                     'attribute_options' => $this->getAttributeOptions($attribute)
                 ];
             }
         }
 
         return $result;
+    }
+
+    private function getAttributeValue(Product $product, string $attributeCode) {
+        $value = $product->getAttributeText($attributeCode);
+
+        if (!$value) {
+            $value = $product->getData($attributeCode);
+        }
+
+        return $value ? : null;
     }
 
     private function getAttributeOptions(AbstractAttribute $attribute): array {
