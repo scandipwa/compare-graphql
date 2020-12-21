@@ -7,7 +7,7 @@
  *
  * @license OSL-3.0 (Open Software License ("OSL") v. 3.0)
  * @package scandipwa/compare-graphql
- * @link    https://github.com/scandipwa/quote-graphql
+ * @link    https://github.com/scandipwa/compare-graphql
  */
 
 declare(strict_types=1);
@@ -17,8 +17,8 @@ namespace ScandiPWA\CompareGraphQl\Model\Resolver;
 use Magento\Framework\GraphQl\Config\Element\Field;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
-use Magento\Quote\Model\QuoteIdMaskFactory;
 use Magento\Catalog\Model\Product\Compare\ItemFactory;
+use ScandiPWA\CompareGraphQl\Helper\Auth as AuthHelper;
 
 /**
  * Class AddProductToCompare
@@ -27,25 +27,25 @@ use Magento\Catalog\Model\Product\Compare\ItemFactory;
 class AddProductToCompare implements ResolverInterface
 {
     /**
-     * @var QuoteIdMaskFactory
-     */
-    private $quoteIdMaskFactory;
-
-    /**
      * @var ItemFactory
      */
     private $compareItemFactory;
 
     /**
-     * @param QuoteIdMaskFactory $quoteIdMaskFactory
-     * @param ItemFactory $compareItemFactory
+     * @var AuthHelper
+     */
+    protected $authHelper;
+
+    /**
+     * @param ItemFactory $compareItemFactory,
+     * @param AuthHelper $authHelper
      */
     public function __construct(
-        QuoteIdMaskFactory $quoteIdMaskFactory,
-        ItemFactory $compareItemFactory
+        ItemFactory $compareItemFactory,
+        AuthHelper $authHelper
     ) {
-        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
         $this->compareItemFactory = $compareItemFactory;
+        $this->authHelper = $authHelper;
     }
 
     /**
@@ -60,26 +60,19 @@ class AddProductToCompare implements ResolverInterface
     ) {
         $productId = (int)$args['product_id'];
         $customerId = (int)$context->getUserId();
-        $guestCardId = isset($args['guestCartId']) ? $args['guestCartId'] : null;
+        $guestCartId = $this->authHelper->getGuestCartId($args);
 
-        if (!$productId || !($customerId || $guestCardId)) {
+        if (!$productId || !($customerId || $guestCartId)) {
             return false;
         }
 
         $item = $this->compareItemFactory->create();
 
-        if ($guestCardId) {
-            $quoteIdMask = $this->quoteIdMaskFactory
-                ->create()
-                ->load($guestCardId, 'masked_id')
-                ->getQuoteId();
-
-            $item->addVisitorId($quoteIdMask);
-        }
-
-        if ($customerId) {
-            $item->setCustomerId($customerId);
-        }
+        $this->authHelper->setAuthData(
+            $item,
+            $customerId,
+            $guestCartId
+        );
 
         $item->loadByProduct($productId);
 

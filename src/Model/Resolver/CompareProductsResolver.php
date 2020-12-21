@@ -7,25 +7,23 @@
  *
  * @license OSL-3.0 (Open Software License ("OSL") v. 3.0)
  * @package scandipwa/compare-graphql
- * @link    https://github.com/scandipwa/quote-graphql
+ * @link    https://github.com/scandipwa/compare-graphql
  */
 
 declare(strict_types=1);
 
 namespace ScandiPWA\CompareGraphQl\Model\Resolver;
 
-use Magento\Catalog\Model\Config as ConfigAlias;
 use Magento\Catalog\Model\Product\Compare\ListCompare;
-use Magento\Catalog\Model\Product\Visibility as VisibilityAlias;
 use Magento\Framework\GraphQl\Config\Element\Field;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
-use Magento\Store\Model\StoreManagerInterface as StoreManagerInterfaceAlias;
-use Magento\Customer\Model\Session;
-use Magento\Customer\Model\Visitor;
-use Magento\Quote\Model\QuoteIdMaskFactory;
-use Magento\CatalogGraphQl\Model\ProductDataProvider;
-use \Magento\Catalog\Model\Product\Media\Config as MediaConfig;
+use Magento\Store\Model\StoreManagerInterface;
+use ScandiPWA\CatalogGraphQl\Model\Resolver\Products\DataProvider\Product as ProductDataProvider;
+use Magento\Framework\Api\SearchCriteriaBuilder;
+use ScandiPWA\Performance\Model\Resolver\Products\DataPostProcessor;
+use ScandiPWA\Performance\Model\Resolver\ResolveInfoFieldsTrait;
+use ScandiPWA\CompareGraphQl\Helper\Auth as AuthHelper;
 
 
 /**
@@ -34,6 +32,7 @@ use \Magento\Catalog\Model\Product\Media\Config as MediaConfig;
  */
 class CompareProductsResolver implements ResolverInterface
 {
+    use ResolveInfoFieldsTrait;
 
     /**
      * @var ListCompare
@@ -41,38 +40,9 @@ class CompareProductsResolver implements ResolverInterface
     protected $listCompare;
 
     /**
-     * @var StoreManagerInterfaceAlias
+     * @var StoreManagerInterface
      */
     protected $storeManager;
-
-    /**
-     * Catalog config
-     *
-     * @var ConfigAlias
-     */
-    protected $catalogConfig;
-
-    /**
-     * Catalog product visibility
-     *
-     * @var VisibilityAlias
-     */
-    protected $catalogProductVisibility;
-
-    /**
-     * @var Visitor
-     */
-    private $customerVisitor;
-
-    /**
-     * @var Session
-     */
-    private $customerSession;
-
-    /**
-     * @var QuoteIdMaskFactory
-     */
-    private $quoteIdMaskFactory;
 
     /**
      * @var ProductDataProvider
@@ -80,42 +50,43 @@ class CompareProductsResolver implements ResolverInterface
     private $productDataProvider;
 
     /**
-     * @var MediaConfig
+     * @var SearchCriteriaBuilder
      */
-    private $mediaConfig;
+    private $searchCriteriaBuilder;
+
+    /**
+     * @var DataPostProcessor
+     */
+    private $postProcessor;
+
+    /**
+     * @var AuthHelper
+     */
+    protected $authHelper;
 
     /**
      * GetCartItems constructor.
      * @param ListCompare $listCompare
-     * @param StoreManagerInterfaceAlias $storeManager
-     * @param ConfigAlias $catalogConfig
-     * @param VisibilityAlias $catalogProductVisibility
-     * @param Visitor $customerVisitor
-     * @param Session $customerSession
-     * @param QuoteIdMaskFactory $quoteIdMaskFactory
+     * @param StoreManagerInterface $storeManager
      * @param ProductDataProvider $productDataProvider
-     * @param MediaConfig $mediaConfig
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @param DataPostProcessor $postProcessor
+     * @param AuthHelper $authHelper
      */
     public function __construct(
         ListCompare $listCompare,
-        StoreManagerInterfaceAlias $storeManager,
-        ConfigAlias $catalogConfig,
-        VisibilityAlias $catalogProductVisibility,
-        Visitor $customerVisitor,
-        Session $customerSession,
-        QuoteIdMaskFactory $quoteIdMaskFactory,
+        StoreManagerInterface $storeManager,
         ProductDataProvider $productDataProvider,
-        MediaConfig $mediaConfig
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        DataPostProcessor $postProcessor,
+        AuthHelper $authHelper
     ) {
         $this->listCompare = $listCompare;
         $this->storeManager = $storeManager;
-        $this->catalogConfig = $catalogConfig;
-        $this->catalogProductVisibility = $catalogProductVisibility;
-        $this->customerVisitor = $customerVisitor;
-        $this->customerSession = $customerSession;
-        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
         $this->productDataProvider = $productDataProvider;
-        $this->mediaConfig = $mediaConfig;
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
+        $this->postProcessor = $postProcessor;
+        $this->authHelper = $authHelper;
     }
 
     public function resolve(
@@ -126,24 +97,19 @@ class CompareProductsResolver implements ResolverInterface
         array $args = null
     ) {
         $customerId = (int)$context->getUserId();
-        $guestCardId = isset($args['guestCartId']) ? $args['guestCartId'] : null;
+        $guestCartId = $this->authHelper->getGuestCartId($args);
 
-        if (!$customerId && !$guestCardId) {
+        if (!$customerId && !$guestCartId) {
             return null;
         }
 
         $collection = $this->listCompare->getItemCollection();
 
-        if ($customerId) {
-            $collection->setCustomerId($customerId);
-        } elseif ($guestCardId) {
-            $quoteIdMask = $this->quoteIdMaskFactory
-                ->create()
-                ->load($guestCardId, 'masked_id')
-                ->getQuoteId();
-
-            $collection->setVisitorId($quoteIdMask);
-        }
+        $this->authHelper->setAuthData(
+            $collection,
+            $customerId,
+            $guestCartId
+        );
 
         $store = $this->storeManager->getStore();
         $collection->setStore($store);
@@ -157,20 +123,22 @@ class CompareProductsResolver implements ResolverInterface
         $products = [];
 
         if ($count) {
+            $path = 'compareProducts/products';
+            $attributeCodes = $this->getFieldsFromProductInfo($info, $path);
+
             $productIds = $collection->getProductIds();
+            $searchCriteria = $this->searchCriteriaBuilder
+                ->addFilter('entity_id', $productIds, 'in')
+                ->create();
 
-            foreach ($productIds as $productId) {
-                $item = $this->productDataProvider->getProductDataById((int)$productId);
+            $productItems = $this->productDataProvider
+                ->getList($searchCriteria, $attributeCodes)
+                ->getItems();
 
-                if (isset($item['thumbnail']) && !empty($item['thumbnail'])) {
-                    $item['thumbnail'] = [
-                        'path' => $item['thumbnail'],
-                        'url' => $this->mediaConfig->getMediaUrl($item['thumbnail']),
-                    ];
-                }
-
-                $products[] = $item;
-            }
+            $products = $this->postProcessor->process($productItems, $path, $info, [
+                'isSingleProduct' => false,
+                'isCompare' => true
+            ]);
         }
 
         return [

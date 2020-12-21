@@ -6,8 +6,8 @@
  * See LICENSE for license details.
  *
  * @license OSL-3.0 (Open Software License ("OSL") v. 3.0)
- * @package scandipwa/quote-graphql
- * @link    https://github.com/scandipwa/quote-graphql
+ * @package scandipwa/compare-graphql
+ * @link    https://github.com/scandipwa/compare-graphql
  */
 
 namespace ScandiPWA\CompareGraphQl\Observer;

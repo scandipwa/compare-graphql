@@ -7,7 +7,7 @@
  *
  * @license OSL-3.0 (Open Software License ("OSL") v. 3.0)
  * @package scandipwa/compare-graphql
- * @link    https://github.com/scandipwa/quote-graphql
+ * @link    https://github.com/scandipwa/compare-graphql
  */
 
 declare(strict_types=1);
@@ -18,8 +18,8 @@ use Magento\Catalog\Model\ResourceModel\Product\Compare\Item\CollectionFactory;
 use Magento\Framework\GraphQl\Config\Element\Field;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
-use Magento\Quote\Model\QuoteIdMaskFactory;
 use Magento\Store\Model\StoreManagerInterface;
+use ScandiPWA\CompareGraphQl\Helper\Auth as AuthHelper;
 
 /**
  * Class ClearCompareProducts
@@ -27,11 +27,6 @@ use Magento\Store\Model\StoreManagerInterface;
  */
 class ClearCompareProducts implements ResolverInterface
 {
-    /**
-     * @var QuoteIdMaskFactory
-     */
-    private $quoteIdMaskFactory;
-
     /**
      * @var StoreManagerInterface
      */
@@ -45,18 +40,23 @@ class ClearCompareProducts implements ResolverInterface
     protected $itemCollectionFactory;
 
     /**
+     * @var AuthHelper
+     */
+    protected $authHelper;
+
+    /**
      * @param StoreManagerInterface $storeManager
-     * @param QuoteIdMaskFactory $quoteIdMaskFactory
      * @param CollectionFactory $itemCollectionFactory
+     * @param AuthHelper $authHelper
      */
     public function __construct(
         StoreManagerInterface $storeManager,
-        QuoteIdMaskFactory $quoteIdMaskFactory,
-        CollectionFactory $itemCollectionFactory
+        CollectionFactory $itemCollectionFactory,
+        AuthHelper $authHelper
     ) {
         $this->storeManager = $storeManager;
-        $this->quoteIdMaskFactory = $quoteIdMaskFactory;
         $this->itemCollectionFactory = $itemCollectionFactory;
+        $this->authHelper = $authHelper;
     }
 
     /**
@@ -70,32 +70,22 @@ class ClearCompareProducts implements ResolverInterface
         array $args = null
     ) {
         $customerId = (int)$context->getUserId();
-        $guestCardId = isset($args['guestCartId']) ? $args['guestCartId'] : null;
+        $guestCartId = $this->authHelper->getGuestCartId($args);
 
-        if (!$customerId && !$guestCardId) {
+        if (!$customerId && !$guestCartId) {
             return false;
         }
 
         $collection = $this->itemCollectionFactory->create();
 
-        if ($customerId) {
-            $collection->setCustomerId($customerId);
-        } elseif ($guestCardId) {
-            $quoteIdMask = $this->quoteIdMaskFactory
-                ->create()
-                ->load($guestCardId, 'masked_id')
-                ->getQuoteId();
-
-            $collection->setVisitorId($quoteIdMask);
-        }
+        $this->authHelper->setAuthData(
+            $collection,
+            $customerId,
+            $guestCartId
+        );
 
         $store = $this->storeManager->getStore();
         $collection->setStore($store);
-
-        try {
-            // This loads items but throws undefined method exception which can be ignored
-            $collection->load();
-        } catch (\Exception $e) {}
 
         $collection->clear();
 
