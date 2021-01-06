@@ -19,7 +19,7 @@ use Magento\Quote\Model\QuoteIdMaskFactory;
 class Auth
 {
     /** @var QuoteIdMaskFactory */
-    private QuoteIdMaskFactory $quoteIdMaskFactory;
+    private $quoteIdMaskFactory;
 
     /**
      * @param QuoteIdMaskFactory $quoteIdMaskFactory
