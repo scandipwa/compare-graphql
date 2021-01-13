@@ -124,7 +124,10 @@ class CompareProductsResolver implements ResolverInterface
 
         if ($count) {
             $path = 'compareProducts/products';
-            $attributeCodes = $this->getFieldsFromProductInfo($info, $path);
+            $attributeCodes = array_merge(
+                $this->getFieldsFromProductInfo($info, $path),
+                ['options']
+            );
 
             $productIds = $collection->getProductIds();
             $searchCriteria = $this->searchCriteriaBuilder
