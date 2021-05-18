@@ -101,10 +101,20 @@ class GetComparableItems extends SourceGetComparableItems
             $imagePath = $item->getData('thumbnail');
 
             $productData = $item->getData();
+            $productData['entity_id'] = $item->getId();
             $productData['model'] = $item;
+            $productData['stock_item'] = [];
+            $productData['stock_status'] = $item['inStock'] === 'yes' ? 'IN_STOCK' : 'OUT_OF_STOCK';
+            $productData['categories'] = [];
+            $productData['attributes'] = [];
+            $productData['tier_prices'] = [];
             $productData['thumbnail'] = [
                 'path' => $imagePath,
                 'url' => $this->getImageUrl('thumbnail', $imagePath, $item)
+            ];
+            $productData['small_image'] = [
+                'path' => $imagePath,
+                'url' => $this->getImageUrl('small', $imagePath, $item)
             ];
         } catch (LocalizedException $e) {
             throw new GraphQlInputException(__($e->getMessage()));
