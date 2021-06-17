@@ -11,11 +11,14 @@ use Magento\Catalog\Block\Product\Compare\ListCompare;
 use Magento\Catalog\Model\Product;
 use Magento\Catalog\Model\ProductRepository;
 use Magento\CompareListGraphQl\Model\Service\Collection\GetComparableItemsCollection as ComparableItemsCollection;
+use Magento\Framework\App\Area;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\GraphQl\Exception\GraphQlInputException;
 use Magento\Framework\GraphQl\Query\Resolver\ContextInterface;
 use Magento\CompareListGraphQl\Model\Service\GetComparableItems as SourceGetComparableItems;
 use Magento\Catalog\Helper\Image;
+use Magento\Store\Model\App\Emulation;
+use Magento\Store\Model\StoreManagerInterface;
 
 /**
  * Get products compare list
@@ -43,16 +46,30 @@ class GetComparableItems extends SourceGetComparableItems
     protected $_imageBuilder;
 
     /**
+     * @var StoreManagerInterface
+     */
+    protected $storeManager;
+
+    /**
+     * @var Emulation
+     */
+    protected $emulation;
+
+    /**
      * @param ListCompare $listCompare
      * @param ComparableItemsCollection $comparableItemsCollection
      * @param ProductRepository $productRepository
      * @param Image $_imageBuilder
+     * @param StoreManagerInterface $storeManager
+     * @param Emulation $emulation
      */
     public function __construct(
         ListCompare $listCompare,
         ComparableItemsCollection $comparableItemsCollection,
         ProductRepository $productRepository,
-        Image $_imageBuilder
+        Image $_imageBuilder,
+        StoreManagerInterface $storeManager,
+        Emulation $emulation
     ) {
         parent::__construct($listCompare, $comparableItemsCollection, $productRepository);
 
@@ -60,6 +77,8 @@ class GetComparableItems extends SourceGetComparableItems
         $this->comparableItemsCollection = $comparableItemsCollection;
         $this->productRepository = $productRepository;
         $this->_imageBuilder=$_imageBuilder;
+        $this->storeManager = $storeManager;
+        $this->emulation = $emulation;
     }
 
     /**
@@ -114,7 +133,7 @@ class GetComparableItems extends SourceGetComparableItems
             ];
             $productData['small_image'] = [
                 'path' => $imagePath,
-                'url' => $this->getImageUrl('small', $imagePath, $item)
+                'url' => $this->getImageUrl('small_image', $imagePath, $item)
             ];
         } catch (LocalizedException $e) {
             throw new GraphQlInputException(__($e->getMessage()));
@@ -157,13 +176,18 @@ class GetComparableItems extends SourceGetComparableItems
         ?string $imagePath,
         $product
     ): string {
-        if (!isset($imagePath)) {
-            return $this->_imageBuilder->getDefaultPlaceholderUrl($imageType);
+        $storeId = $this->storeManager->getStore()->getId();
+        $this->emulation->startEnvironmentEmulation($storeId, Area::AREA_FRONTEND, true);
+
+        if (!isset($imagePath) || $imagePath == 'no_selection') {
+            $imageUrl = $this->_imageBuilder->getDefaultPlaceholderUrl($imageType);
+            $this->emulation->stopEnvironmentEmulation();
+            return $imageUrl;
         }
 
         $imageId = sprintf('scandipwa_%s', $imageType);
 
-        return $this->_imageBuilder
+        $image = $this->_imageBuilder
             ->init(
                 $product,
                 $imageId,
@@ -172,7 +196,10 @@ class GetComparableItems extends SourceGetComparableItems
             ->constrainOnly(true)
             ->keepAspectRatio(true)
             ->keepTransparency(true)
-            ->keepFrame(false)
-            ->getUrl();
+            ->keepFrame(false);
+
+        $this->emulation->stopEnvironmentEmulation();
+
+        return $image->getUrl();
     }
 }

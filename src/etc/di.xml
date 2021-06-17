@@ -14,4 +14,7 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
     <preference for="Magento\CompareListGraphQl\Model\Service\GetComparableItems"
                 type="ScandiPWA\CompareGraphQl\Model\Service\GetComparableItems"/>
+
+    <preference for="Magento\CompareListGraphQl\Model\Service\GetCompareList"
+                type="ScandiPWA\CompareGraphQl\Model\Service\GetCompareList"/>
 </config>
