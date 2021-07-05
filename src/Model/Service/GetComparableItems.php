@@ -135,6 +135,10 @@ class GetComparableItems extends SourceGetComparableItems
                 'path' => $imagePath,
                 'url' => $this->getImageUrl('small_image', $imagePath, $item)
             ];
+            $productData['image'] = [
+                'path' => $imagePath,
+                'url' => $this->getImageUrl('image', $imagePath, $item)
+            ];
         } catch (LocalizedException $e) {
             throw new GraphQlInputException(__($e->getMessage()));
         }
