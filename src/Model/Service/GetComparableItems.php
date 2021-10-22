@@ -123,7 +123,7 @@ class GetComparableItems extends SourceGetComparableItems
             $productData['entity_id'] = $item->getId();
             $productData['model'] = $item;
             $productData['stock_item'] = [];
-            $productData['stock_status'] = $item['inStock'] === 'yes' ? 'IN_STOCK' : 'OUT_OF_STOCK';
+            $productData['stock_status'] = $item['quantity_and_stock_status']['is_in_stock'] ? 'IN_STOCK' : 'OUT_OF_STOCK';
             $productData['categories'] = [];
             $productData['attributes'] = [];
             $productData['tier_prices'] = [];
